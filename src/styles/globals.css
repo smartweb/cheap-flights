@@ -11,10 +11,10 @@ html,
 body {
   padding: 0;
   margin: 0;
-  background: #f6f8fb;
-  color: #1a1d24;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  background: #ffffff;
+  color: #171717;
+  font-family: var(--font-geist-sans), -apple-system, system-ui, "Segoe UI",
+    sans-serif;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -29,49 +29,59 @@ a {
   text-decoration: none;
 }
 
-/* 移动端 H5 容器：固定 480px 上限，桌面端居中显示 */
+/* 移动端 H5 容器：固定 480px 上限，桌面端居中带发丝边框 */
 .h5-shell {
   max-width: 480px;
   margin: 0 auto;
   min-height: 100vh;
-  background: #f6f8fb;
+  background: #ffffff;
   position: relative;
-  overflow-x: hidden;
+  border-left: 1px solid #eaeaea;
+  border-right: 1px solid #eaeaea;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+@media (min-width: 481px) {
+  .h5-shell {
+    box-shadow: 0 0 80px -20px rgba(0, 0, 0, 0.1);
+  }
 }
 
 /* 触底安全区 */
 .pb-safe {
-  padding-bottom: calc(96px + var(--safe-bottom));
+  padding-bottom: calc(64px + var(--safe-bottom));
 }
 
 .bar-safe {
   padding-bottom: var(--safe-bottom);
 }
 
-/* 按钮交互 */
+/* 按钮交互：极轻微下沉 */
 .btn-press {
-  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.12s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease,
+    color 0.12s ease, transform 0.1s ease;
 }
 .btn-press:active {
-  transform: scale(0.96);
-  opacity: 0.9;
+  transform: scale(0.99);
 }
 
-/* 骨架屏 */
+/* 骨架屏：低对比度脉冲 */
 @keyframes shimmer {
   0% {
-    background-position: -468px 0;
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
   }
   100% {
-    background-position: 468px 0;
+    opacity: 0.5;
   }
 }
 .skeleton {
-  background: linear-gradient(90deg, #e9edf3 25%, #f2f5f9 37%, #e9edf3 63%);
-  background-size: 936px 100%;
-  animation: shimmer 1.4s ease infinite;
-  border-radius: 10px;
+  background: #f5f5f5;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
 }
 
 /* 滚动条隐藏（横向 chips） */
@@ -83,59 +93,22 @@ a {
   scrollbar-width: none;
 }
 
-/* 全局淡入上行 */
-@keyframes fadeUp {
+/* 全局淡入 */
+@keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-.fade-up {
-  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+.fade-in {
+  animation: fadeIn 0.28s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-/* 弹性回弹（卡片进入错峰） */
-@keyframes popIn {
-  0% {
-    opacity: 0;
-    transform: translateY(14px) scale(0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-.pop-in {
-  animation: popIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* 价格跳动高亮 */
-@keyframes pricePulse {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.price-pulse {
-  animation: pricePulse 0.5s ease;
-}
-
-/* 价格数字感：tabular 等宽 */
-.tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
-
-/* 底部弹层上滑 */
+/* 弹层上滑 */
 @keyframes sheetUp {
   from {
     transform: translateY(100%);
@@ -145,11 +118,11 @@ a {
   }
 }
 .sheet-up {
-  animation: sheetUp 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sheetUp 0.28s cubic-bezier(0.4, 0.2, 0.2, 1) both;
 }
 
 /* 遮罩淡入 */
-@keyframes fadeIn {
+@keyframes overlayIn {
   from {
     opacity: 0;
   }
@@ -157,8 +130,8 @@ a {
     opacity: 1;
   }
 }
-.fade-in {
-  animation: fadeIn 0.2s ease both;
+.overlay-in {
+  animation: overlayIn 0.2s ease both;
 }
 
 /* 旋转加载 */
@@ -168,5 +141,25 @@ a {
   }
 }
 .spin {
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s linear infinite;
+}
+
+/* tabular 等宽数字（价格/时间） */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 限制行数 */
+.clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

@@ -6,14 +6,13 @@ import {
   DEFAULT_ORIGIN_CODE,
   DEFAULT_THRESHOLD,
   ORIGIN_MAP,
-  dateLabel,
   pushCeil,
 } from "@/lib/catalog";
 import { useUserSettings } from "@/lib/settings";
 import { DealCard } from "@/components/DealCard";
 import { DealDetailSheet } from "@/components/DealDetailSheet";
 import { SettingsSheet } from "@/components/SettingsSheet";
-import { Spinner, EmptyState } from "@/components/ui";
+import { Spinner, EmptyState, Badge } from "@/components/ui";
 
 interface ScanMeta {
   from_code: string;
@@ -24,21 +23,7 @@ interface ScanMeta {
   auth_error: boolean;
 }
 
-/** 未来 7 天日期条 */
-function buildDateStrip(): string[] {
-  const out: string[] = [];
-  const base = new Date();
-  base.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(base.getTime() + i * 86400000);
-    out.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-        d.getDate()
-      ).padStart(2, "0")}`
-    );
-  }
-  return out;
-}
+type SortKey = "price" | "time" | "duration";
 
 export function HomeClient() {
   const { settings, setSettings, ready } = useUserSettings({
@@ -46,7 +31,6 @@ export function HomeClient() {
     threshold: DEFAULT_THRESHOLD,
   });
 
-  const [dateStrip] = useState<string[]>(() => buildDateStrip());
   const [deals, setDeals] = useState<FlightDeal[]>([]);
   const [meta, setMeta] = useState<ScanMeta | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,10 +38,19 @@ export function HomeClient() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeDeal, setActiveDeal] = useState<FlightDeal | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortKey>("price");
   const inFlight = useRef(false);
 
   const ceil = pushCeil(settings.threshold);
   const origin = ORIGIN_MAP[settings.from_code];
+
+  const sortDeals = useCallback((arr: FlightDeal[], key: SortKey): FlightDeal[] => {
+    const out = [...arr];
+    if (key === "price") out.sort((a, b) => a.total - b.total);
+    else if (key === "time") out.sort((a, b) => a.dep_time.localeCompare(b.dep_time));
+    else out.sort((a, b) => (a.duration_minutes ?? 9e9) - (b.duration_minutes ?? 9e9));
+    return out;
+  }, []);
 
   const runScan = useCallback(
     async (s: { from_code: string; threshold: number }) => {
@@ -73,7 +66,7 @@ export function HomeClient() {
         });
         const json = await res.json();
         if (!json.ok) throw new Error(json.error || "扫描失败");
-        setDeals(json.data.deals as FlightDeal[]);
+        setDeals(sortDeals(json.data.deals as FlightDeal[], sort));
         setMeta(json.data.meta as ScanMeta);
         setLastUpdated(Date.now());
       } catch (e) {
@@ -84,23 +77,17 @@ export function HomeClient() {
         inFlight.current = false;
       }
     },
-    []
+    [sort, sortDeals]
   );
 
-  // 设置就绪后首次扫描
   useEffect(() => {
     if (ready) runScan(settings);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const onSort = (key: "price" | "time" | "duration") => {
-    setDeals((prev) => {
-      const arr = [...prev];
-      if (key === "price") arr.sort((a, b) => a.total - b.total);
-      else if (key === "time") arr.sort((a, b) => a.dep_time.localeCompare(b.dep_time));
-      else arr.sort((a, b) => (a.duration_minutes ?? 9e9) - (b.duration_minutes ?? 9e9));
-      return arr;
-    });
+  const onSort = (key: SortKey) => {
+    setSort(key);
+    setDeals((prev) => sortDeals(prev, key));
   };
 
   const belowBudgetCount = useMemo(
@@ -110,78 +97,83 @@ export function HomeClient() {
 
   return (
     <main className="min-h-screen pb-safe">
-      {/* 顶部品牌区 */}
-      <header className="px-5 pt-[calc(16px+var(--safe-top))] pb-4 bg-gradient-to-b from-brand-soft/70 to-canvas">
+      {/* 顶部：极简品牌头 */}
+      <header className="px-5 pt-[calc(20px+var(--safe-top))] pb-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🦞</span>
-            <div>
-              <h1 className="text-lg font-bold text-ink leading-tight">捡漏机票</h1>
-              <p className="text-[11px] text-muted leading-tight">龙虾出行 · 特价监控</p>
-            </div>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tighter">特价机票</h1>
+            <p className="text-2xs text-gray-600 mt-0.5">低于预算就推送 · 龙虾出行数据</p>
           </div>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="btn-press h-9 px-3 rounded-full bg-card border border-line shadow-soft flex items-center gap-1.5 text-sm font-medium text-ink"
+            className="btn-press h-8 px-3 rounded-md border border-gray-200 hover:border-gray-400 text-xs font-medium text-gray-900 flex items-center gap-1.5"
           >
-            <span className="text-base">⚙️</span>
-            <span className="hidden sm:inline">设置</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            设置
           </button>
         </div>
 
-        {/* 出发地 + 阈值胶囊 */}
+        {/* 状态条：出发地 + 阈值 */}
         <button
           onClick={() => setSettingsOpen(true)}
-          className="btn-press mt-3 w-full bg-card rounded-xl2 border border-line/70 shadow-soft px-4 py-2.5 flex items-center justify-between"
+          className="btn-press mt-4 w-full bg-white rounded-lg border border-gray-200 hover:border-gray-400 px-4 py-3 flex items-center divide-x divide-gray-100 transition-colors"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{origin?.emoji ?? "🏙️"}</span>
-            <div className="text-left">
-              <div className="text-[11px] text-muted leading-none">出发</div>
-              <div className="text-sm font-bold text-ink mt-0.5">{origin?.name ?? "深圳"}出发</div>
-            </div>
+          <div className="flex items-center gap-2 pr-4">
+            <span className="text-2xs text-gray-600">出发</span>
+            <span className="text-sm font-semibold text-gray-900">{origin?.name ?? "深圳"}</span>
           </div>
-          <div className="h-8 w-px bg-line mx-2" />
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-xl">🎯</span>
-            <div className="text-left">
-              <div className="text-[11px] text-muted leading-none">监控金额</div>
-              <div className="text-sm font-bold text-coral-dark mt-0.5 tnum">
-                ¥{settings.threshold} <span className="text-[11px] font-normal text-muted">· 推 ≤¥{ceil}</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-2 px-4 flex-1">
+            <span className="text-2xs text-gray-600">监控</span>
+            <span className="text-sm font-semibold text-gray-900 tnum">¥{settings.threshold}</span>
+            <span className="text-2xs text-gray-500">推 ≤ ¥{ceil}</span>
           </div>
-          <span className="text-muted text-sm ml-2">›</span>
+          <svg className="text-gray-400 ml-2" width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </header>
 
-      {/* 操作条 */}
-      <div className="px-5 sticky top-0 z-20 bg-canvas/90 backdrop-blur py-2.5 flex items-center gap-2 border-b border-line/60">
+      {/* 工具条：刷新 + 排序 */}
+      <div className="px-5 py-2.5 flex items-center gap-2 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-20">
         <button
           onClick={() => runScan(settings)}
           disabled={loading}
-          className="btn-press flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand text-white text-sm font-semibold disabled:opacity-60"
+          className="btn-press flex items-center gap-1.5 px-3 h-7 rounded-md border border-gray-200 hover:border-gray-400 text-xs font-medium text-gray-900 disabled:opacity-50"
         >
-          {loading ? <Spinner className="text-white" /> : <span>🔄</span>}
+          {loading ? <Spinner /> : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M3 12a9 9 0 0115.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 01-15.5 6.3L3 16M3 21v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
           {loading ? "扫描中" : "刷新"}
         </button>
-        <div className="ml-auto flex items-center gap-1 bg-card border border-line rounded-full p-0.5">
+        <div className="ml-auto flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
           {(["price", "time", "duration"] as const).map((k) => (
-            <SortBtn key={k} k={k} onSort={onSort} />
+            <button
+              key={k}
+              onClick={() => onSort(k)}
+              className={`px-2.5 h-6 rounded text-2xs font-medium transition ${
+                sort === k ? "bg-white text-gray-900 shadow-xs" : "text-gray-600"
+              }`}
+            >
+              {k === "price" ? "价格" : k === "time" ? "时间" : "时长"}
+            </button>
           ))}
         </div>
       </div>
 
       {/* 内容区 */}
-      <section className="px-4 pt-3 space-y-3">
+      <section className="px-4 py-3 space-y-2.5">
         {loading && deals.length === 0 && (
           <>
             <div className="text-center py-3">
-              <div className="inline-flex items-center gap-2 text-sm text-brand-deep font-medium">
-                <Spinner className="text-brand" />
-                正在全网捡漏，约 10 秒…
+              <div className="inline-flex items-center gap-2 text-xs text-gray-900 font-medium">
+                <Spinner className="text-gray-900" />
+                正在扫描未来 7 天特价…
               </div>
-              <div className="mt-1 text-[11px] text-muted">扫描未来 7 天 × 全国热门目的地</div>
             </div>
             <DealSkeletons />
           </>
@@ -189,30 +181,28 @@ export function HomeClient() {
 
         {!loading && error && (
           <EmptyState
-            emoji="😵‍💫"
             title="扫描出错了"
-            desc={error + "（已检查 IP 白名单与 token 后重试）"}
+            desc={error}
           />
         )}
 
         {!loading && !error && deals.length === 0 && (
           <EmptyState
-            emoji="🛫"
-            title={`最近 7 天暂无低于 ¥${ceil} 的机票`}
-            desc={`从${origin?.name ?? "深圳"}出发的各目的地含税价都高于 ¥${ceil}。可以调高监控金额，或过几天再来碰碰运气～`}
+            title={`暂无低于 ¥${ceil} 的机票`}
+            desc={`从${origin?.name ?? "深圳"}出发的各目的地含税价都高于 ¥${ceil}。可调高监控金额，或过几天再来。`}
           />
         )}
 
         {deals.length > 0 && (
           <>
-            <div className="px-1 text-[12px] text-muted flex items-center gap-1.5">
-              <span className="text-brand-deep font-semibold">共 {deals.length} 张</span>
+            <div className="px-1 flex items-center gap-2 text-2xs text-gray-600">
+              <span className="text-gray-900 font-semibold">{deals.length} 张特价</span>
               {belowBudgetCount > 0 && (
-                <span className="text-coral-dark font-semibold">· {belowBudgetCount} 张低于预算 🎯</span>
+                <Badge tone="green">{belowBudgetCount} 张低于预算</Badge>
               )}
               {lastUpdated && (
-                <span className="ml-auto text-[11px]">
-                  更新于 {new Date(lastUpdated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                <span className="ml-auto text-gray-500">
+                  {new Date(lastUpdated).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
             </div>
@@ -229,9 +219,8 @@ export function HomeClient() {
         )}
       </section>
 
-      {/* 底部说明 */}
-      <footer className="mt-6 px-5 py-6 text-center">
-        <p className="text-[11px] text-muted/80 leading-relaxed">
+      <footer className="mt-4 px-5 py-6 border-t border-gray-100">
+        <p className="text-center text-2xs text-gray-500 leading-relaxed">
           价格含机建燃油，为参考价；以下单时实时验价为准。<br />
           数据由龙虾出行开放平台提供，仅支持北上广深出发。
         </p>
@@ -251,44 +240,25 @@ export function HomeClient() {
   );
 }
 
-function SortBtn({ k, onSort }: { k: "price" | "time" | "duration"; onSort: (k: "price" | "time" | "duration") => void }) {
-  const [active, setActive] = useState<"price" | "time" | "duration">("price");
-  const label = k === "price" ? "价格" : k === "time" ? "时间" : "时长";
-  return (
-    <button
-      onClick={() => {
-        setActive(k);
-        onSort(k);
-      }}
-      className={`px-2.5 py-1 rounded-full text-[12px] font-medium transition ${
-        active === k ? "bg-ink text-white" : "text-muted"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
 function DealSkeletons() {
   return (
     <>
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="rounded-xl2 overflow-hidden border border-line/60 bg-card">
-          <div className="flex">
-            <div className="flex-1 p-4 space-y-2">
-              <div className="skeleton h-6 w-24" />
+        <div key={i} className="rounded-lg border border-gray-200 p-4">
+          <div className="flex justify-between">
+            <div className="space-y-2 flex-1">
+              <div className="skeleton h-4 w-24" />
               <div className="skeleton h-3 w-32" />
-              <div className="skeleton h-4 w-20 rounded-full" />
             </div>
-            <div className="w-[42%] p-4 space-y-2">
-              <div className="skeleton h-3 w-14 ml-auto" />
-              <div className="skeleton h-8 w-24 ml-auto" />
-              <div className="skeleton h-3 w-20 ml-auto" />
+            <div className="space-y-2">
+              <div className="skeleton h-6 w-16" />
+              <div className="skeleton h-3 w-16" />
             </div>
           </div>
-          <div className="p-3 space-y-2">
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-3 w-2/3" />
+          <div className="my-3 h-px bg-gray-100" />
+          <div className="flex justify-between">
+            <div className="skeleton h-3 w-20" />
+            <div className="skeleton h-3 w-20" />
           </div>
         </div>
       ))}

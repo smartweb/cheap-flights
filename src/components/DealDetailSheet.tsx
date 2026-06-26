@@ -2,7 +2,7 @@
 
 import type { FlightDeal } from "@/lib/deal";
 import { dateLabel, hm } from "@/lib/catalog";
-import { Sheet } from "./ui";
+import { Sheet, Badge } from "./ui";
 
 function durationLabel(min?: number): string {
   if (!min) return "";
@@ -11,14 +11,18 @@ function durationLabel(min?: number): string {
   return m ? `${h}小时${m}分` : `${h}小时`;
 }
 
-/** 官方下单入口：验价 / 直下需调用平台收银台；此处引导到龙虾出行 App / 小程序 */
 const OFFICIAL_BOOKING_URL = "https://open.longxiachuxing.com/";
+
+function shortAirport(name?: string): string {
+  if (!name) return "";
+  return name.replace(/国际机场$/, "").replace(/机场$/, "").trim();
+}
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between py-2.5 border-b border-line/60 last:border-0">
-      <span className="text-sm text-muted">{label}</span>
-      <span className="text-sm text-ink font-medium text-right max-w-[65%]">{value}</span>
+    <div className="flex items-start justify-between py-2.5 border-b border-gray-100 last:border-0">
+      <span className="text-xs text-gray-600">{label}</span>
+      <span className="text-xs text-gray-900 font-medium text-right max-w-[65%]">{value}</span>
     </div>
   );
 }
@@ -32,95 +36,97 @@ export function DealDetailSheet({
 }) {
   if (!deal) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
 
-  const seat =
-    deal.seat_status === "few"
-      ? "余票紧张"
-      : deal.seat_status === "enough"
-      ? "充足"
-      : deal.seat_status === "sold_out"
-      ? "已售罄"
-      : "—";
+  const seatMap: Record<string, { label: string; tone: "green" | "amber" | "red" | "neutral" }> = {
+    few: { label: "余票紧张", tone: "red" },
+    enough: { label: "充足", tone: "green" },
+    sold_out: { label: "已售罄", tone: "neutral" },
+  };
+  const seat = deal.seat_status ? seatMap[deal.seat_status] : null;
 
   return (
     <Sheet open={!!deal} onClose={onClose} title={`${deal.from_city} → ${deal.to_city}`}>
-      {/* 价格大卡 */}
-      <div className="mt-2 rounded-2xl bg-gradient-to-br from-coral to-coral-dark text-white px-5 py-4">
-        <div className="text-xs opacity-90">含税总价</div>
-        <div className="flex items-baseline gap-1 mt-0.5">
-          <span className="text-lg font-semibold">¥</span>
-          <span className="text-4xl font-bold tnum">{deal.total}</span>
-          <span className="text-xs opacity-90 ml-2">/ 单程成人价</span>
+      {/* 价格块：单色大字 */}
+      <div className="rounded-lg border border-gray-200 p-4">
+        <div className="text-2xs text-gray-600 uppercase tracking-wider">含税总价</div>
+        <div className="flex items-baseline gap-1 mt-1">
+          <span className="text-base font-semibold text-gray-900">¥</span>
+          <span className="text-4xl font-bold text-gray-900 tnum tracking-tighter">{deal.total}</span>
+          <span className="text-xs text-gray-600 ml-2">/ 单程成人价</span>
         </div>
-        <div className="mt-2 flex gap-2 text-[11px]">
-          <span className="bg-white/20 rounded-full px-2 py-0.5">机票 ¥{deal.adult_price}</span>
-          <span className="bg-white/20 rounded-full px-2 py-0.5">机建 ¥{deal.airport_tax}</span>
-          <span className="bg-white/20 rounded-full px-2 py-0.5">燃油 ¥{deal.fuel_tax}</span>
+        <div className="mt-3 flex gap-1.5">
+          <Badge tone="neutral">机票 ¥{deal.adult_price}</Badge>
+          <Badge tone="neutral">机建 ¥{deal.airport_tax}</Badge>
+          <Badge tone="neutral">燃油 ¥{deal.fuel_tax}</Badge>
         </div>
       </div>
 
       {/* 航线时间轴 */}
-      <div className="mt-4 rounded-2xl bg-card border border-line/60 p-4">
+      <div className="mt-3 rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <div className="text-center">
-            <div className="text-2xl font-bold text-ink tnum">{hm(deal.dep_time)}</div>
-            <div className="text-xs text-muted mt-0.5">{deal.dep_airport_name} {deal.dep_terminal}</div>
+            <div className="text-xl font-bold text-gray-900 tnum">{hm(deal.dep_time)}</div>
+            <div className="text-2xs text-gray-600 mt-1">{shortAirport(deal.dep_airport_name)} {deal.dep_terminal}</div>
           </div>
           <div className="flex-1 mx-3 text-center">
-            <div className="text-[11px] text-muted">
-              {durationLabel(deal.duration_minutes)}
+            <div className="text-2xs text-gray-600">{durationLabel(deal.duration_minutes)}</div>
+            <div className="relative my-1.5 h-px bg-gray-200">
+              <span className="absolute left-1/2 -translate-x-1/2 -top-[7px] text-2xs text-gray-400">›</span>
             </div>
-            <div className="relative my-1 h-px bg-line">
-              <span className="absolute left-1/2 -translate-x-1/2 -top-2 text-xs">✈️</span>
-            </div>
-            <div className="text-[11px] font-medium text-brand-deep">
+            <div className="text-2xs font-medium text-gray-900">
               {deal.stop_count ? `经停${deal.stop_count}次` : "直飞"}
             </div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-ink tnum">{hm(deal.arr_time)}</div>
-            <div className="text-xs text-muted mt-0.5">{deal.arr_airport_name} {deal.arr_terminal}</div>
+            <div className="text-xl font-bold text-gray-900 tnum">{hm(deal.arr_time)}</div>
+            <div className="text-2xs text-gray-600 mt-1">{shortAirport(deal.arr_airport_name)} {deal.arr_terminal}</div>
           </div>
         </div>
-        <div className="mt-3 text-center text-sm text-ink">
-          {deal.airline_name} {deal.flight_no} · {deal.aircraft_type ? `机型 ${deal.aircraft_type} · ` : ""}
+        <div className="mt-3 pt-3 border-t border-gray-100 text-center text-xs text-gray-900">
+          {deal.airline_name} {deal.flight_no}
+          {deal.aircraft_type ? ` · 机型 ${deal.aircraft_type}` : ""}
+          <span className="text-gray-400"> · </span>
           {deal.cabin_name}
         </div>
       </div>
 
       {/* 费用明细 */}
-      <div className="mt-4">
-        <div className="eyebrow mb-1">费用明细</div>
-        <div className="rounded-2xl bg-card border border-line/60 px-4">
+      <div className="mt-3">
+        <div className="text-2xs text-gray-600 uppercase tracking-wider mb-1">费用明细</div>
+        <div className="rounded-lg border border-gray-200 px-4">
           <Row label="成人票价" value={`¥${deal.adult_price}`} />
           <Row label="机场建设费" value={`¥${deal.airport_tax}`} />
           <Row label="燃油附加费" value={`¥${deal.fuel_tax}`} />
-          <Row label="座位状态" value={seat} />
+          <Row label="出发日期" value={dateLabel(deal.date)} />
+          {seat && <Row label="座位状态" value={<Badge tone={seat.tone}>{seat.label}</Badge>} />}
         </div>
       </div>
 
       {/* 退改规则 */}
-      <div className="mt-4">
-        <div className="eyebrow mb-1">行李与退改</div>
-        <div className="rounded-2xl bg-card border border-line/60 px-4">
-          <Row label="行李额度" value={deal.baggage_rule ? "已含（详见说明）" : "—"} />
-          {deal.refund_rule && <Row label="退票" value={deal.refund_rule} />}
-          {deal.change_rule && <Row label="改签" value={deal.change_rule} />}
+      {(deal.baggage_rule || deal.refund_rule || deal.change_rule) && (
+        <div className="mt-3">
+          <div className="text-2xs text-gray-600 uppercase tracking-wider mb-1">行李与退改</div>
+          <div className="rounded-lg border border-gray-200 px-4">
+            {deal.baggage_rule && <Row label="行李额度" value="已含" />}
+            {deal.refund_rule && <Row label="退票" value={deal.refund_rule} />}
+            {deal.change_rule && <Row label="改签" value={deal.change_rule} />}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* 下单入口 */}
+      {/* 下单入口：单色实心按钮 */}
       <a
         href={deal.booking_url || OFFICIAL_BOOKING_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="btn-press mt-5 flex items-center justify-center gap-2 w-full rounded-2xl bg-gradient-to-r from-coral to-coral-dark text-white font-bold py-3.5 text-base shadow-pop"
+        className="btn-press mt-4 flex items-center justify-center gap-2 w-full rounded-md bg-gray-900 text-white font-medium py-3 text-sm hover:bg-gray-700 transition-colors"
       >
-        立即去抢票
-        <span className="text-base">→</span>
+        去抢票
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </a>
-      <p className="mt-2 text-center text-[11px] text-muted leading-relaxed">
-        价格为参考价，以下单时实时验价为准。<br />
-        下单由龙虾出行开放平台提供，跳转其收银台完成。
+      <p className="mt-2 text-center text-2xs text-gray-500 leading-relaxed">
+        价格为参考价，以下单时实时验价为准。下单由龙虾出行开放平台提供。
       </p>
     </Sheet>
   );
