@@ -18,8 +18,13 @@ export const runtime = "nodejs";
 const DEFAULT_DAYS = 7;
 /** 单城市单日请求的 page_size：只取最便宜的 1 个航班（已按 price 排序） */
 const PAGE_SIZE = 1;
-/** 并发扇出批大小（上游数据查询 QPS 上限 50，留余量取 24） */
-const CONCURRENCY = 24;
+/**
+ * 并发扇出批大小。
+ * 注：实际上游 QPS 由 lib/client 的滑动窗口限流器统一控制在 15 QPS
+ * （龙虾出行限 20 QPS，留 25% 余量）。这里只控制内存并发度，
+ * 设为一个足够大的值让限流器满速运转。
+ */
+const CONCURRENCY = 40;
 
 interface ScanBody {
   from_code?: string;

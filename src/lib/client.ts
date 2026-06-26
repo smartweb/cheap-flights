@@ -44,6 +44,34 @@ interface RequestOptions {
   body?: unknown;
 }
 
+/* ------------------------------------------------------------------ */
+/* 上游 QPS 限流（滑动窗口）                                            */
+/*                                                                    */
+/* 龙虾出行对每个应用限 20 QPS。这里全局控制在 15 QPS（留 25% 余量），  */
+/* 所有上游调用（搜索/验价/下单/支付）都经过 takeSlot() 排队，           */
+/* 确保任意 1 秒滑动窗口内发出的请求不超过上限，避免触发 429。          */
+/* ------------------------------------------------------------------ */
+const MAX_QPS = 15;
+const WINDOW_MS = 1000;
+const requestTimestamps: number[] = [];
+
+/** 占用一个速率槽位：若当前 1s 窗口内已达上限，则 sleep 到最早的槽位释放 */
+function takeSlot(): Promise<void> {
+  const now = Date.now();
+  // 清理窗口外的旧时间戳
+  while (requestTimestamps.length && now - requestTimestamps[0] >= WINDOW_MS) {
+    requestTimestamps.shift();
+  }
+  if (requestTimestamps.length < MAX_QPS) {
+    requestTimestamps.push(now);
+    return Promise.resolve();
+  }
+  // 需要等待：到窗口内最早一条请求满 1s 为止
+  const wait = WINDOW_MS - (now - requestTimestamps[0]) + 1;
+  requestTimestamps.push(now + wait);
+  return new Promise((resolve) => setTimeout(resolve, wait));
+}
+
 /** 调用上游接口，返回 data 字段；失败抛 LxApiError */
 export async function callApi<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   assertServer();
@@ -55,6 +83,9 @@ export async function callApi<T>(path: string, opts: RequestOptions = {}): Promi
       if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
     }
   }
+
+  // 限流：先排队拿速率槽位，再发请求
+  await takeSlot();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
