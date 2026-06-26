@@ -13,6 +13,7 @@ import {
   savePassengers,
   type StoredPassenger,
 } from "@/lib/passengers";
+import { saveOrder } from "@/lib/orders";
 import { hm } from "@/lib/catalog";
 import { Spinner } from "@/components/ui";
 
@@ -201,6 +202,19 @@ function BookInner() {
       }));
       savePassengers(mergePassengers(savedList, usedPassengers));
       saveContact({ name: contactName.trim(), phone: contactPhone });
+
+      // 记录本机订单（用于「我的订单」回查实时状态）
+      saveOrder({
+        system_no: json.data.system_no,
+        out_trade_no: json.data.out_trade_no,
+        created_at: Date.now(),
+        from_city: deal.from_city ?? "",
+        to_city: deal.to_city ?? "",
+        date: deal.date ?? "",
+        flight_no: deal.flight_no ?? "",
+        airline_name: deal.airline_name ?? "",
+        verified_total: json.data.verified_total ?? deal.total ?? 0,
+      });
 
       // 跳转托管收银台（localStorage 已同步写入，导航不会丢失）
       window.location.href = json.data.checkout_url;

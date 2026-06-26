@@ -11,6 +11,8 @@
  */
 import { callApi } from "./client";
 import type {
+  LxFlightOrderDetailRequest,
+  LxFlightOrderDetailResponse,
   LxFlightOrderPayRequest,
   LxFlightOrderPayResponse,
   LxFlightOrderCreateRequest,
@@ -47,6 +49,14 @@ export function createFlightOrder(req: LxFlightOrderCreateRequest) {
 /** 发起支付：原生渠道（wechat_h5 / alipay_h5 等返回 pay_params）；user_pay 通常无需调用 */
 export function payFlightOrder(req: LxFlightOrderPayRequest) {
   return callApi<LxFlightOrderPayResponse>("/open/v1/flight/order/pay", {
+    method: "POST",
+    body: req,
+  });
+}
+
+/** 订单详情：按 system_no 或 out_trade_no 查询支付/出票/票号等实时状态 */
+export function getFlightOrderDetail(req: LxFlightOrderDetailRequest) {
+  return callApi<LxFlightOrderDetailResponse>("/open/v1/flight/order/detail", {
     method: "POST",
     body: req,
   });

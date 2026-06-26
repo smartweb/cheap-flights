@@ -222,3 +222,47 @@ export interface LxFlightOrderPayResponse {
   pay_params?: Record<string, string>;
 }
 
+/* ---- 订单详情 ---- */
+export interface LxFlightOrderDetailRequest {
+  system_no?: string;
+  out_trade_no?: string;
+}
+
+export interface LxFlightOrderInfo {
+  airline_name?: string;
+  flight_no?: string;
+  dep_city?: string;
+  arr_city?: string;
+  dep_airport_name?: string;
+  arr_airport_name?: string;
+  dep_terminal?: string;
+  arr_terminal?: string;
+  dep_time?: string;
+  arr_time?: string;
+  cabin_class?: string;
+}
+
+export interface LxFlightOrderDetailResponse {
+  system_no?: string;
+  out_trade_no?: string;
+  status?: string; // 如 completed
+  status_text?: string; // 如 已完成
+  pay_status?: string; // 如 paid
+  pay_status_text?: string;
+  flight_status?: string;
+  flight_status_text?: string;
+  total_amount?: number;
+  created_at?: string;
+  paid_at?: string;
+  issued_at?: string;
+  pnr?: string;
+  ticket_nos?: string[];
+  contact?: LxContactInfo;
+  flight_info?: LxFlightOrderInfo;
+  passengers?: LxPassengerInfo[];
+  can_cancel?: boolean;
+  can_refund?: boolean;
+  estimated_refund_fee?: number;
+}
+
+
