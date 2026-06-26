@@ -6,7 +6,10 @@ import type { FlightDeal } from "@/lib/deal";
 import type { IdType, PassengerType } from "@/lib/types";
 import {
   ID_TYPE_LABELS,
+  loadContact,
   loadPassengers,
+  mergePassengers,
+  saveContact,
   savePassengers,
   type StoredPassenger,
 } from "@/lib/passengers";
@@ -72,12 +75,34 @@ function BookInner() {
 
   useEffect(() => {
     const list = loadPassengers();
+    const contact = loadContact();
     setSavedList(list);
-    // 默认用第一个常用乘机人填联系人
-    if (list[0]) {
-      setPassengers([{ ...EMPTY_PASSENGER, name: list[0].name, id_type: list[0].id_type, id_number: list[0].id_number, phone: list[0].phone, type: list[0].type }]);
-      setContactName(list[0].name);
-      setContactPhone(list[0].phone);
+
+    // 默认填上所有常用乘机人（最多 4 个，与表单上限一致）
+    if (list.length > 0) {
+      setPassengers(
+        list.slice(0, 4).map((sp) => ({
+          name: sp.name,
+          type: sp.type,
+          id_type: sp.id_type,
+          id_number: sp.id_number,
+          phone: sp.phone,
+          birthday: sp.birthday ?? "",
+          sex: sp.sex ?? 1,
+        }))
+      );
+      // 联系人：优先用独立记忆的 contact，否则用第一个乘机人
+      if (contact) {
+        setContactName(contact.name);
+        setContactPhone(contact.phone);
+      } else {
+        setContactName(list[0].name);
+        setContactPhone(list[0].phone);
+      }
+    } else if (contact) {
+      // 没有常用乘机人，但有上次联系人
+      setContactName(contact.name);
+      setContactPhone(contact.phone);
     }
   }, []);
 
@@ -90,20 +115,28 @@ function BookInner() {
   const removePax = (i: number) => setPassengers((p) => p.filter((_, idx) => idx !== i));
 
   const fillFromSaved = (sp: StoredPassenger) => {
-    setPassengers((prev) => [
-      {
-        name: sp.name,
-        type: sp.type,
-        id_type: sp.id_type,
-        id_number: sp.id_number,
-        phone: sp.phone,
-        birthday: sp.birthday ?? "",
-        sex: sp.sex ?? 1,
-      },
-      ...prev.slice(1),
-    ]);
-    setContactName(sp.name);
-    setContactPhone(sp.phone);
+    const filled: FormPassenger = {
+      name: sp.name,
+      type: sp.type,
+      id_type: sp.id_type,
+      id_number: sp.id_number,
+      phone: sp.phone,
+      birthday: sp.birthday ?? "",
+      sex: sp.sex ?? 1,
+    };
+    setPassengers((prev) => {
+      // 若已存在该乘机人则不重复添加
+      if (prev.some((p) => p.name === sp.name && p.id_number === sp.id_number)) {
+        return prev;
+      }
+      // 优先填到第一个空行（姓名为空）
+      const firstEmpty = prev.findIndex((p) => !p.name.trim());
+      if (firstEmpty >= 0) {
+        return prev.map((p, i) => (i === firstEmpty ? filled : p));
+      }
+      // 没有空行且未达上限，追加
+      return prev.length < 4 ? [...prev, filled] : prev;
+    });
   };
 
   const submit = async () => {
@@ -155,22 +188,21 @@ function BookInner() {
       if (!json.ok || !json.data?.checkout_url) {
         throw new Error(json.error || "下单失败");
       }
-      // 记忆乘机人（去重）
-      const merged = [
-        ...passengers.map((p) => ({
-          name: p.name.trim(),
-          type: p.type,
-          id_type: p.id_type,
-          id_number: p.id_number.trim(),
-          phone: p.phone,
-          birthday: p.birthday || undefined,
-          sex: p.sex,
-        })),
-        ...savedList.filter((s) => !passengers.some((p) => p.name.trim() === s.name && p.id_number.trim() === s.id_number)),
-      ];
-      savePassengers(merged);
 
-      // 跳转托管收银台
+      // 下单成功：把本次乘机人 + 联系人记忆到本地（同步写，跳转前完成）
+      const usedPassengers: StoredPassenger[] = passengers.map((p) => ({
+        name: p.name.trim(),
+        type: p.type,
+        id_type: p.id_type,
+        id_number: p.id_number.trim(),
+        phone: p.phone,
+        birthday: p.birthday || undefined,
+        sex: p.sex,
+      }));
+      savePassengers(mergePassengers(savedList, usedPassengers));
+      saveContact({ name: contactName.trim(), phone: contactPhone });
+
+      // 跳转托管收银台（localStorage 已同步写入，导航不会丢失）
       window.location.href = json.data.checkout_url;
     } catch (e) {
       setError(e instanceof Error ? e.message : "下单失败，请稍后重试");
