@@ -103,3 +103,122 @@ export interface LxFlightSearchResponse {
   /** 返程航班（往返时返回） */
   return_flights?: LxFlightItem[];
 }
+
+/* ------------------------------------------------------------------ */
+/* 验价 / 下单 / 支付                                                  */
+/* ------------------------------------------------------------------ */
+export type IdType =
+  | "ID_CARD"
+  | "PASSPORT"
+  | "HK_MACAO_PERMIT"
+  | "RETURN_HOME_PERMIT"
+  | "TAIWAN_PERMIT"
+  | "TAIWAN_COMPATRIOT_PERMIT"
+  | "SOLDIER_CARD"
+  | "FOREIGN_PERMANENT_RESIDENCE_ID"
+  | "HK_MACAO_TAIWAN_RESIDENCE_PERMIT"
+  | "HOUSEHOLD_REGISTER"
+  | "BIRTH_CERTIFICATE"
+  | "OTHER";
+
+export type PassengerType = "adult" | "child" | "infant";
+
+export interface LxContactInfo {
+  name: string;
+  phone: string;
+  email?: string;
+}
+
+export interface LxPassengerInfo {
+  name: string;
+  name_en?: string;
+  phone: string;
+  type: PassengerType;
+  id_type: IdType;
+  id_number: string;
+  birthday?: string; // YYYY-MM-DD，儿童/婴儿必填
+  sex?: 1 | 2; // 1男 2女
+  nationality_code?: string; // 国际航班必填
+  card_valid_end_date?: string; // 护照/港澳台证件必填
+}
+
+/* ---- 验价 ---- */
+export interface LxFlightPricingRequest {
+  search_offer_id: string;
+  return_search_offer_id?: string;
+  passengers: LxPassengerInfo[];
+}
+
+export interface LxPassengerFare {
+  passenger_type: PassengerType;
+  base_fare: number;
+  airport_tax: number;
+  fuel_tax: number;
+  service_fee?: number;
+  total: number;
+}
+
+export interface LxFlightPricingResponse {
+  offer_id: string;
+  return_offer_id?: string;
+  total_fare: number;
+  price_changed?: boolean;
+  expired_at?: string;
+  baggage_rule?: string;
+  refund_rule?: string;
+  change_rule?: string;
+  passenger_fares?: LxPassengerFare[];
+}
+
+/* ---- 下单 ---- */
+export type PayMode = "user_pay" | "enterprise_credit" | "monthly_settle";
+
+export interface LxFlightOrderCreateRequest {
+  out_trade_no: string; // 商户订单号（幂等键，必填）
+  offer_id: string; // 验价返回的 offer_id（10分钟有效）
+  return_offer_id?: string;
+  contact: LxContactInfo;
+  passengers: LxPassengerInfo[];
+  pay_mode: PayMode;
+  return_url?: string; // 支付成功跳转（user_pay 必填）
+  callback_url?: string; // 状态回调
+}
+
+export interface LxFlightOrderCreateResponse {
+  /** 托管收银台地址（pay_mode=user_pay 时返回） */
+  checkout_url?: string;
+  system_no?: string; // 平台订单号
+  out_trade_no?: string;
+  status?: string; // 如 pending_pay
+  total_amount?: number;
+  pay_expire_time?: string;
+  pay_mode?: string;
+  pnr?: string;
+}
+
+/* ---- 发起支付（原生渠道，可选；user_pay 走 checkout_url 即可） ---- */
+export type FlightPayType =
+  | "wechat_h5"
+  | "wechat_jsapi"
+  | "wechat_native"
+  | "wechat_app"
+  | "wechat_mini"
+  | "alipay_app"
+  | "alipay_h5";
+
+export interface LxFlightOrderPayRequest {
+  system_no: string;
+  pay_type: FlightPayType;
+  client_ip?: string;
+  openid?: string;
+  return_url?: string;
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface LxFlightOrderPayResponse {
+  pay_type?: string;
+  /** 支付参数（按 pay_type 不同，如 pay_url / qrcode / wx jsapi 参数） */
+  pay_params?: Record<string, string>;
+}
+

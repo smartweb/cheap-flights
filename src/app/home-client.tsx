@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { FlightDeal } from "@/lib/deal";
 import {
   DEFAULT_ORIGIN_CODE,
@@ -40,6 +41,7 @@ export function HomeClient() {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("price");
   const inFlight = useRef(false);
+  const router = useRouter();
 
   const ceil = pushCeil(settings.threshold);
   const origin = ORIGIN_MAP[settings.from_code];
@@ -89,6 +91,27 @@ export function HomeClient() {
     setSort(key);
     setDeals((prev) => sortDeals(prev, key));
   };
+
+  // 进入下单流程：携带 deal 摘要 + search_offer_id 跳转 /book
+  const goBook = useCallback(
+    (deal: FlightDeal) => {
+      const q = new URLSearchParams({
+        soid: deal.search_offer_id,
+        from: deal.from_city,
+        to: deal.to_city,
+        fn: deal.flight_no,
+        al: deal.airline_name,
+        dep: deal.dep_time,
+        arr: deal.arr_time,
+        date: deal.date,
+        cabin: deal.cabin_name,
+        total: String(deal.total),
+      });
+      setActiveDeal(null);
+      router.push(`/book?${q.toString()}`);
+    },
+    [router]
+  );
 
   const belowBudgetCount = useMemo(
     () => deals.filter((d) => d.total <= settings.threshold).length,
@@ -235,7 +258,7 @@ export function HomeClient() {
           runScan(s);
         }}
       />
-      <DealDetailSheet deal={activeDeal} onClose={() => setActiveDeal(null)} />
+      <DealDetailSheet deal={activeDeal} onClose={() => setActiveDeal(null)} onBook={goBook} />
     </main>
   );
 }

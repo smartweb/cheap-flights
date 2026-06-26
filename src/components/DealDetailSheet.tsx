@@ -11,8 +11,6 @@ function durationLabel(min?: number): string {
   return m ? `${h}小时${m}分` : `${h}小时`;
 }
 
-const OFFICIAL_BOOKING_URL = "https://open.longxiachuxing.com/";
-
 function shortAirport(name?: string): string {
   if (!name) return "";
   return name.replace(/国际机场$/, "").replace(/机场$/, "").trim();
@@ -30,9 +28,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 export function DealDetailSheet({
   deal,
   onClose,
+  onBook,
 }: {
   deal: FlightDeal | null;
   onClose: () => void;
+  onBook?: (deal: FlightDeal) => void;
 }) {
   if (!deal) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
 
@@ -113,20 +113,19 @@ export function DealDetailSheet({
         </div>
       )}
 
-      {/* 下单入口：单色实心按钮 */}
-      <a
-        href={deal.booking_url || OFFICIAL_BOOKING_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+      {/* 下单入口：进入订单填写 → 验价 → 收银台 */}
+      <button
+        onClick={() => onBook?.(deal)}
         className="btn-press mt-4 flex items-center justify-center gap-2 w-full rounded-md bg-gray-900 text-white font-medium py-3 text-sm hover:bg-gray-700 transition-colors"
       >
         去抢票
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </a>
+      </button>
       <p className="mt-2 text-center text-2xs text-gray-500 leading-relaxed">
-        价格为参考价，以下单时实时验价为准。下单由龙虾出行开放平台提供。
+        点击后实时验价并创建订单，跳转龙虾出行收银台完成支付。<br />
+        最终价格以验价为准（含服务费）。
       </p>
     </Sheet>
   );
