@@ -4,18 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:server": "tsx --env-file=.env.local src/server/server.ts",
     "build": "next build",
     "start": "next start",
+    "start:server": "tsx --env-file=.env.local src/server/server.ts",
     "lint": "next lint"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "geist": "^1.7.2",
     "next": "14.2.5",
+    "node-cron": "^4.5.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "20.14.10",
+    "@types/node-cron": "^3.0.11",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.19",
@@ -23,6 +29,7 @@
     "eslint-config-next": "14.2.5",
     "postcss": "8.4.39",
     "tailwindcss": "3.4.6",
+    "tsx": "^4.22.4",
     "typescript": "5.5.3"
   }
 }

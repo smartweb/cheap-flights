@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FlightDeal } from "@/lib/deal";
 import {
-  DEFAULT_ORIGIN_CODE,
-  DEFAULT_THRESHOLD,
   ORIGIN_MAP,
   pushCeil,
+  type DestScope,
 } from "@/lib/catalog";
-import { useUserSettings } from "@/lib/settings";
+import { DEFAULT_SETTINGS, useUserSettings } from "@/lib/settings";
 import { DealCard } from "@/components/DealCard";
 import { DealDetailSheet } from "@/components/DealDetailSheet";
 import { SettingsSheet } from "@/components/SettingsSheet";
@@ -18,6 +17,7 @@ import { Spinner, EmptyState, Badge } from "@/components/ui";
 interface ScanMeta {
   from_code: string;
   threshold: number;
+  scope: DestScope;
   ceil: number;
   total_deals: number;
   destinations_scanned: number;
@@ -26,11 +26,15 @@ interface ScanMeta {
 
 type SortKey = "price" | "time" | "duration";
 
+/** scope 显示文案 */
+const SCOPE_LABEL: Record<DestScope, string> = {
+  domestic: "国内",
+  international: "东南亚",
+};
+
 export function HomeClient() {
-  const { settings, setSettings, ready } = useUserSettings({
-    from_code: DEFAULT_ORIGIN_CODE,
-    threshold: DEFAULT_THRESHOLD,
-  });
+  const { settings, setSettings, ready } = useUserSettings(DEFAULT_SETTINGS);
+  const [scope, setScope] = useState<DestScope>("domestic");
 
   const [deals, setDeals] = useState<FlightDeal[]>([]);
   const [meta, setMeta] = useState<ScanMeta | null>(null);
@@ -40,10 +44,29 @@ export function HomeClient() {
   const [activeDeal, setActiveDeal] = useState<FlightDeal | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("price");
+  const [unseen, setUnseen] = useState(0);
   const inFlight = useRef(false);
   const router = useRouter();
 
-  const ceil = pushCeil(settings.threshold);
+  /** 当前 scope 使用的阈值 */
+  const currentThreshold =
+    scope === "international" ? settings.sea_threshold : settings.threshold;
+
+  // 拉取未读告警数（首页红点徽章）
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/alerts?unseen=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive && j.ok) setUnseen(j.data.count ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const ceil = pushCeil(currentThreshold);
   const origin = ORIGIN_MAP[settings.from_code];
 
   const sortDeals = useCallback((arr: FlightDeal[], key: SortKey): FlightDeal[] => {
@@ -55,7 +78,7 @@ export function HomeClient() {
   }, []);
 
   const runScan = useCallback(
-    async (s: { from_code: string; threshold: number }) => {
+    async (s: { from_code: string; threshold: number }, sc: DestScope) => {
       if (inFlight.current) return;
       inFlight.current = true;
       setLoading(true);
@@ -64,7 +87,11 @@ export function HomeClient() {
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ from_code: s.from_code, threshold: s.threshold }),
+          body: JSON.stringify({
+            from_code: s.from_code,
+            threshold: s.threshold,
+            scope: sc,
+          }),
         });
         const json = await res.json();
         if (!json.ok) throw new Error(json.error || "扫描失败");
@@ -83,9 +110,17 @@ export function HomeClient() {
   );
 
   useEffect(() => {
-    if (ready) runScan(settings);
+    if (ready) runScan({ from_code: settings.from_code, threshold: currentThreshold }, scope);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
+
+  /** 切换 scope 后自动扫描对应目的地集合 */
+  const onScopeChange = (sc: DestScope) => {
+    if (sc === scope) return;
+    setScope(sc);
+    const t = sc === "international" ? settings.sea_threshold : settings.threshold;
+    runScan({ from_code: settings.from_code, threshold: t }, sc);
+  };
 
   const onSort = (key: SortKey) => {
     setSort(key);
@@ -114,8 +149,8 @@ export function HomeClient() {
   );
 
   const belowBudgetCount = useMemo(
-    () => deals.filter((d) => d.total <= settings.threshold).length,
-    [deals, settings.threshold]
+    () => deals.filter((d) => d.total <= currentThreshold).length,
+    [deals, currentThreshold]
   );
 
   return (
@@ -128,6 +163,21 @@ export function HomeClient() {
             <p className="text-2xs text-gray-600 mt-0.5">低于预算就推送 · 龙虾出行数据</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/subscriptions")}
+              className="btn-press relative h-8 w-8 grid place-items-center rounded-md border border-gray-200 hover:border-gray-400 text-gray-900"
+              aria-label="航线监控"
+              title="航线监控"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2a3 3 0 00-3 3v0a3 3 0 00-3 3 3 3 0 000 6 3 3 0 003 3 3 3 0 003 3 3 3 0 003-3 3 3 0 003-3 3 3 0 000-6 3 3 0 00-3-3 3 3 0 00-3-3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+              {unseen > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 grid place-items-center rounded-full bg-danger text-white text-2xs font-bold tnum">
+                  {unseen > 99 ? "99+" : unseen}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => router.push("/orders")}
               className="btn-press h-8 w-8 grid place-items-center rounded-md border border-gray-200 hover:border-gray-400 text-gray-900"
@@ -165,7 +215,7 @@ export function HomeClient() {
           </div>
           <div className="flex items-center gap-2 px-4 flex-1">
             <span className="text-2xs text-gray-600">监控</span>
-            <span className="text-sm font-semibold text-gray-900 tnum">¥{settings.threshold}</span>
+            <span className="text-sm font-semibold text-gray-900 tnum">¥{currentThreshold}</span>
             <span className="text-2xs text-gray-500">推 ≤ ¥{ceil}</span>
           </div>
           <svg className="text-gray-400 ml-2" width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -174,10 +224,26 @@ export function HomeClient() {
         </button>
       </header>
 
-      {/* 工具条：刷新 + 排序 */}
+      {/* 工具条：scope 切换 + 刷新 + 排序 */}
       <div className="px-5 py-2.5 flex items-center gap-2 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-20">
+        {/* 国内 / 东南亚 Tab */}
+        <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+          {(["domestic", "international"] as const).map((sc) => (
+            <button
+              key={sc}
+              onClick={() => onScopeChange(sc)}
+              className={`px-2.5 h-6 rounded text-2xs font-medium transition ${
+                scope === sc ? "bg-white text-gray-900 shadow-xs" : "text-gray-600"
+              }`}
+            >
+              {SCOPE_LABEL[sc]}
+            </button>
+          ))}
+        </div>
         <button
-          onClick={() => runScan(settings)}
+          onClick={() =>
+            runScan({ from_code: settings.from_code, threshold: currentThreshold }, scope)
+          }
           disabled={loading}
           className="btn-press flex items-center gap-1.5 px-3 h-7 rounded-md border border-gray-200 hover:border-gray-400 text-xs font-medium text-gray-900 disabled:opacity-50"
         >
@@ -210,7 +276,7 @@ export function HomeClient() {
             <div className="text-center py-3">
               <div className="inline-flex items-center gap-2 text-xs text-gray-900 font-medium">
                 <Spinner className="text-gray-900" />
-                正在扫描未来 7 天特价…
+                正在扫描{SCOPE_LABEL[scope]}未来 7 天特价…
               </div>
             </div>
             <DealSkeletons />
@@ -226,8 +292,8 @@ export function HomeClient() {
 
         {!loading && !error && deals.length === 0 && (
           <EmptyState
-            title={`暂无低于 ¥${ceil} 的机票`}
-            desc={`从${origin?.name ?? "深圳"}出发的各目的地含税价都高于 ¥${ceil}。可调高监控金额，或过几天再来。`}
+            title={`暂无低于 ¥${ceil} 的${SCOPE_LABEL[scope]}机票`}
+            desc={`从${origin?.name ?? "深圳"}出发的${SCOPE_LABEL[scope]}各目的地含税价都高于 ¥${ceil}。可调高监控金额，或过几天再来。`}
           />
         )}
 
@@ -248,7 +314,7 @@ export function HomeClient() {
               <DealCard
                 key={d.id}
                 deal={d}
-                threshold={settings.threshold}
+                threshold={currentThreshold}
                 index={i}
                 onClick={() => setActiveDeal(d)}
               />
@@ -260,7 +326,7 @@ export function HomeClient() {
       <footer className="mt-4 px-5 py-6 border-t border-gray-100">
         <p className="text-center text-2xs text-gray-500 leading-relaxed">
           价格含机建燃油，为参考价；以下单时实时验价为准。<br />
-          数据由龙虾出行开放平台提供，仅支持北上广深出发。
+          数据由龙虾出行开放平台提供，国内 / 东南亚均支持北上广深出发。
         </p>
       </footer>
 
@@ -268,9 +334,11 @@ export function HomeClient() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         settings={settings}
+        scope={scope}
         onSave={(s) => {
           setSettings(s);
-          runScan(s);
+          const t = scope === "international" ? s.sea_threshold : s.threshold;
+          runScan({ from_code: s.from_code, threshold: t }, scope);
         }}
       />
       <DealDetailSheet deal={activeDeal} onClose={() => setActiveDeal(null)} onBook={goBook} />

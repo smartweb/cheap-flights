@@ -1,24 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { ORIGIN_CITIES } from "@/lib/catalog";
+import { ORIGIN_CITIES, type DestScope } from "@/lib/catalog";
 import type { UserSettings } from "@/lib/settings";
 
-const THRESHOLD_PRESETS = [300, 500, 800, 1000, 1500];
+/** 按 scope 区分的阈值预设档（元） */
+const THRESHOLD_PRESETS: Record<DestScope, number[]> = {
+  domestic: [300, 500, 800, 1000, 1500],
+  international: [800, 1200, 2000, 3000, 4000],
+};
+
+const SCOPE_LABEL: Record<DestScope, string> = {
+  domestic: "国内",
+  international: "东南亚",
+};
 
 export function SettingsSheet({
   open,
   onClose,
   settings,
+  scope,
   onSave,
 }: {
   open: boolean;
   onClose: () => void;
   settings: UserSettings;
+  /** 当前首页激活的 scope：决定打开时默认编辑哪一档阈值 */
+  scope: DestScope;
   onSave: (s: UserSettings) => void;
 }) {
   const [fromCode, setFromCode] = useState(settings.from_code);
   const [threshold, setThreshold] = useState(settings.threshold);
+  const [seaThreshold, setSeaThreshold] = useState(settings.sea_threshold);
+  /** Sheet 内切换编辑国内 / 东南亚阈值，默认聚焦当前 scope */
+  const [editScope, setEditScope] = useState<DestScope>(scope);
 
   const [lastOpen, setLastOpen] = useState(false);
   if (open !== lastOpen) {
@@ -26,10 +41,17 @@ export function SettingsSheet({
     if (open) {
       setFromCode(settings.from_code);
       setThreshold(settings.threshold);
+      setSeaThreshold(settings.sea_threshold);
+      setEditScope(scope);
     }
   }
 
-  const ceil = Math.round(threshold * 1.1);
+  // 当前编辑的 scope 对应的值 / setter
+  const isSea = editScope === "international";
+  const editingValue = isSea ? seaThreshold : threshold;
+  const setEditingValue = isSea ? setSeaThreshold : setThreshold;
+  const ceil = Math.round(editingValue * 1.1);
+  const presets = THRESHOLD_PRESETS[editScope];
 
   return (
     <>
@@ -82,11 +104,28 @@ export function SettingsSheet({
 
               {/* 监控金额 */}
               <section>
-                <label className="block text-xs font-medium text-gray-900">
-                  监控金额（含税总价）
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium text-gray-900">
+                    监控金额（含税总价）
+                  </label>
+                  {/* 国内 / 东南亚 阈值切换 */}
+                  <div className="flex items-center gap-0.5 bg-gray-100 rounded-md p-0.5">
+                    {(["domestic", "international"] as const).map((sc) => (
+                      <button
+                        key={sc}
+                        onClick={() => setEditScope(sc)}
+                        className={`px-2 h-5 rounded text-2xs font-medium transition ${
+                          editScope === sc ? "bg-white text-gray-900 shadow-xs" : "text-gray-600"
+                        }`}
+                      >
+                        {SCOPE_LABEL[sc]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="mt-1 text-2xs text-gray-600">
-                  只推 <span className="font-semibold text-gray-900">¥{ceil}</span>（监控金额 × 110%）以下的机票
+                  {SCOPE_LABEL[editScope]}：只推{" "}
+                  <span className="font-semibold text-gray-900">¥{ceil}</span>（监控金额 × 110%）以下的机票
                 </p>
                 <div className="mt-3 flex items-baseline gap-1 border-b-2 border-gray-200 focus-within:border-gray-900 pb-1.5 transition-colors">
                   <span className="text-lg font-semibold text-gray-900">¥</span>
@@ -95,19 +134,19 @@ export function SettingsSheet({
                     inputMode="numeric"
                     min={100}
                     max={99999}
-                    value={threshold}
-                    onChange={(e) => setThreshold(Math.max(100, Number(e.target.value) || 0))}
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(Math.max(100, Number(e.target.value) || 0))}
                     className="flex-1 w-0 text-3xl font-bold tnum text-gray-900 bg-transparent outline-none tracking-tighter"
                   />
                   <span className="text-xs text-gray-600">/ 张</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {THRESHOLD_PRESETS.map((p) => {
-                    const active = p === threshold;
+                  {presets.map((p) => {
+                    const active = p === editingValue;
                     return (
                       <button
                         key={p}
-                        onClick={() => setThreshold(p)}
+                        onClick={() => setEditingValue(p)}
                         className={`btn-press px-3 py-1 rounded-md text-xs font-medium border tnum transition ${
                           active
                             ? "border-gray-900 bg-gray-100 text-gray-900"
@@ -120,14 +159,18 @@ export function SettingsSheet({
                   })}
                 </div>
                 <div className="mt-4 rounded-md bg-gray-100 px-3.5 py-3 text-2xs text-gray-700 leading-relaxed">
-                  含税总价 = 票价 + 机建费（¥50）+ 燃油费。监控 ¥500 时，
-                  会推送 ≤ ¥550 的机票，留一点抢票缓冲。
+                  含税总价 = 票价 + 机建费（¥50）+ 燃油费。监控 ¥{editingValue} 时，
+                  会推送 ≤ ¥{ceil} 的机票，留一点抢票缓冲。
                 </div>
               </section>
 
               <button
                 onClick={() => {
-                  onSave({ from_code: fromCode, threshold });
+                  onSave({
+                    from_code: fromCode,
+                    threshold,
+                    sea_threshold: seaThreshold,
+                  });
                   onClose();
                 }}
                 className="btn-press w-full rounded-md bg-gray-900 text-white font-medium py-3 text-sm hover:bg-gray-700 transition-colors"
