@@ -291,9 +291,16 @@ export function HomeClient() {
         )}
 
         {!loading && !error && deals.length === 0 && (
-          <EmptyState
-            title={`暂无低于 ¥${ceil} 的${SCOPE_LABEL[scope]}机票`}
-            desc={`从${origin?.name ?? "深圳"}出发的${SCOPE_LABEL[scope]}各目的地含税价都高于 ¥${ceil}。可调高监控金额，或过几天再来。`}
+          <InternationalEmptyHint
+            scope={scope}
+            fromCode={settings.from_code}
+            originName={origin?.name ?? "深圳"}
+            ceil={ceil}
+            onPickOrigin={(code) => {
+              const next = { ...settings, from_code: code };
+              setSettings(next);
+              runScan({ from_code: code, threshold: currentThreshold }, scope);
+            }}
           />
         )}
 
@@ -343,6 +350,58 @@ export function HomeClient() {
       />
       <DealDetailSheet deal={activeDeal} onClose={() => setActiveDeal(null)} onBook={goBook} />
     </main>
+  );
+}
+
+/**
+ * 空态：国际（东南亚）数据当前上游覆盖有限——
+ * 深圳出发几乎无东南亚模拟数据，广州出发已有部分航线（如胡志明）。
+ * 这里给诚实提示，并允许一键切换到有数据的出发地。
+ */
+function InternationalEmptyHint({
+  scope,
+  fromCode,
+  originName,
+  ceil,
+  onPickOrigin,
+}: {
+  scope: DestScope;
+  fromCode: string;
+  originName: string;
+  ceil: number;
+  onPickOrigin: (code: string) => void;
+}) {
+  const label = SCOPE_LABEL[scope];
+  // 国际 + 深圳出发：上游该象限基本无数据，给出换出发地引导
+  const seaFromSZ = scope === "international" && fromCode === "SZX";
+
+  return (
+    <div className="fade-in text-center py-16 px-6">
+      <div className="mx-auto mb-5 h-12 w-12 grid place-items-center rounded-lg bg-gray-100 text-gray-400">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M3 16l5-2 4-8 4 8 5 2v2H3v-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className="text-sm font-semibold text-gray-900">
+        暂无低于 ¥{ceil} 的{label}机票
+      </div>
+      {seaFromSZ ? (
+        <div className="mt-1.5 text-xs text-gray-600 leading-relaxed max-w-[280px] mx-auto">
+          从<strong>{originName}</strong>出发的{label}航线数据暂时较少。
+          <button
+            onClick={() => onPickOrigin("CAN")}
+            className="btn-press ml-1 text-gray-900 font-semibold underline underline-offset-2 decoration-gray-400 hover:decoration-gray-900"
+          >
+            试试广州出发
+          </button>
+          ，或调高监控金额 / 过几天再来。
+        </div>
+      ) : (
+        <div className="mt-1.5 text-xs text-gray-600 leading-relaxed max-w-[280px] mx-auto">
+          从{originName}出发的{label}各目的地含税价都高于 ¥{ceil}。可调高监控金额，或过几天再来。
+        </div>
+      )}
+    </div>
   );
 }
 
